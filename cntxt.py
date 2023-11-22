@@ -2,6 +2,7 @@ import copy
 import inspect
 from contextlib import contextmanager
 from dataclasses import asdict
+from dataclasses import dataclass
 from dataclasses import is_dataclass
 from typing import Self
 
@@ -15,6 +16,10 @@ class DictMixinMeta(type):
 
 
 class DataclassMixinMeta(type):
+    def __new__(cls, *args, **kwargs):
+        new_cls = super().__new__(cls, *args, **kwargs)
+        return dataclass(new_cls)
+
     def __getattribute__(self, item):
         if item in ("_current_context", "_class_identifier"):
             return super().__getattribute__(item)
@@ -28,13 +33,13 @@ class ContextMixin:
 
     @classmethod
     @contextmanager
-    def set(cls, **context):
-        return cls._wrap_context_frame(**context)
+    def set(cls, **ctx):
+        return cls._wrap_context_frame(**ctx)
 
     @classmethod
-    def wrap(cls, func, **context):
+    def wrap(cls, func, **ctx):
         def wrapper(*args, **kwargs):
-            with cls.set(**context):
+            with cls.set(**ctx):
                 return func(*args, **kwargs)
         return wrapper
 
@@ -43,7 +48,7 @@ class ContextMixin:
         return f"_cntxt_{str(cls)}"
 
     @classmethod
-    def _wrap_context_frame(cls, **kwargs):
+    def _wrap_context_frame(cls, **ctx):
         current_frame = frame = inspect.currentframe().f_back.f_back
         while frame:
             if context_stack := frame.f_locals.get(cls._class_identifier(), []):
@@ -53,7 +58,7 @@ class ContextMixin:
             frame = current_frame
             context_stack = []
         prev_context: Self = context_stack and context_stack[-1] or cls()
-        context = prev_context._merge(kwargs)
+        context = prev_context._merge(ctx)
         context_stack.append(context)
         frame.f_locals[cls._class_identifier()] = context_stack
 
@@ -63,14 +68,14 @@ class ContextMixin:
         if not context_stack:
             del frame.f_locals[cls._class_identifier()]
 
-    def _merge(self, kwargs):
+    def _merge(self, ctx):
         if is_dataclass(self):
             new_dict = asdict(self)
         elif isinstance(self, dict):
             new_dict = copy.deepcopy(self)
         else:
             raise TypeError(f"Context class is not a dict or a dataclass but {type(self)}")
-        new_dict.update(kwargs)
+        new_dict.update(ctx)
         return type(self)(**new_dict)
 
     @classmethod
@@ -84,13 +89,21 @@ class ContextMixin:
         return None
 
 
-class DictMixin(ContextMixin, metaclass=DictMixinMeta):
+class Context(ContextMixin, metaclass=DataclassMixinMeta):
+    """
+    Default Context class.
+
+    Is also a dataclass, with all the associated behavior.
+    """
     pass
 
 
-class DataclassMixin(ContextMixin, metaclass=DataclassMixinMeta):
+class DictContext(ContextMixin, metaclass=DictMixinMeta):
     pass
 
 
-class context(dict, DictMixin):
+class context(dict, DictContext):
+    """
+    Default convenience dict-based context
+    """
     pass

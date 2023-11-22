@@ -1,25 +1,22 @@
 from dataclasses import asdict
-from dataclasses import dataclass
+from dataclasses import is_dataclass
 
 from cntxt import context
-from cntxt import DataclassMixin
+from cntxt import Context
 
 
-@dataclass
-class Ctx(DataclassMixin):
-    a: int | None = None
-    b: str | None = None
+class Ctx(Context):
+    a: int = None
+    b: str = None
 
 
-@dataclass
-class SubValue:
-    e: int | None = None
+class SubValue(Context):
+    e: int = None
 
 
-@dataclass
-class Ctx2(DataclassMixin):
-    c: int | None = None
-    d: SubValue | None = None
+class Ctx2(Context):
+    c: int = None
+    d: SubValue = None
 
 
 def test_dict_context():
@@ -40,6 +37,8 @@ def test_dict_context():
 
 
 def test_dataclass_context():
+    assert is_dataclass(Ctx)
+
     assert Ctx._current_context() is None
 
     with Ctx.set(a=1, b="b"):
