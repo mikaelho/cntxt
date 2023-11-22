@@ -1,6 +1,7 @@
+from dataclasses import asdict
 from dataclasses import dataclass
 
-from cntxt import cntxt
+from cntxt import context
 from cntxt import DataclassMixin
 
 
@@ -12,7 +13,7 @@ class Ctx(DataclassMixin):
 
 @dataclass
 class SubValue:
-    d: int | None = None
+    e: int | None = None
 
 
 @dataclass
@@ -22,20 +23,20 @@ class Ctx2(DataclassMixin):
 
 
 def test_dict_context():
-    assert cntxt._current_context() is None
+    assert context._current_context() is None
 
-    with cntxt.set(a=1, b=1):
-        assert cntxt["a"] == 1
-        assert cntxt["b"] == 1
+    with context.set(a=1, b=1):
+        assert context["a"] == 1
+        assert context["b"] == 1
 
-        with cntxt.set(a=2):
-            assert cntxt["a"] == 2
-            assert cntxt["b"] == 1
+        with context.set(a=2):
+            assert context["a"] == 2
+            assert context["b"] == 1
 
-        assert cntxt["a"] == 1
-        assert cntxt["b"] == 1
+        assert context["a"] == 1
+        assert context["b"] == 1
 
-    assert cntxt._current_context() is None
+    assert context._current_context() is None
 
 
 def test_dataclass_context():
@@ -93,6 +94,11 @@ def test_multiple_contexts():
                 assert Ctx2.c == 1
 
 
+def test_sub_contexts():
+    c = Ctx2(c=1, d=SubValue(e=2))
+    assert asdict(c) == {'c': 1, 'd': {'e': 2}}
+
+
 def test_wrap():
     def some_func(a):
         assert a == 1
@@ -101,3 +107,14 @@ def test_wrap():
     some_func = Ctx.wrap(some_func, b=2)
 
     some_func(1)
+
+
+def test_double_wrap():
+    def some_func():
+        assert Ctx.a == 1
+        assert Ctx.b == 2
+
+    some_func = Ctx.wrap(some_func, a=1)
+    some_func = Ctx.wrap(some_func, b=2)
+
+    some_func()

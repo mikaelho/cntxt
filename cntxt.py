@@ -92,5 +92,5 @@ class DataclassMixin(ContextMixin, metaclass=DataclassMixinMeta):
     pass
 
 
-class cntxt(dict, DictMixin):
+class context(dict, DictMixin):
     pass
