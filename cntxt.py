@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from dataclasses import is_dataclass
 from typing import Self
 
+__all__ = "context", "Context", "DictContext"
+
 
 class DictMixinMeta(type):
     def __getitem__(self, item):
@@ -58,8 +60,8 @@ class ContextMixin:
             frame = current_frame
             context_stack = []
         prev_context: Self = context_stack and context_stack[-1] or cls()
-        context = prev_context._merge(ctx)
-        context_stack.append(context)
+        updated_context = prev_context._merge(ctx)
+        context_stack.append(updated_context)
         frame.f_locals[cls._class_identifier()] = context_stack
 
         yield
@@ -70,12 +72,11 @@ class ContextMixin:
 
     def _merge(self, ctx):
         if is_dataclass(self):
-            new_dict = asdict(self)
+            new_dict = update_dict(asdict(self), **ctx)
         elif isinstance(self, dict):
-            new_dict = copy.deepcopy(self)
+            new_dict = update_dict(self, **ctx)
         else:
             raise TypeError(f"Context class is not a dict or a dataclass but {type(self)}")
-        new_dict.update(ctx)
         return type(self)(**new_dict)
 
     @classmethod
@@ -107,3 +108,40 @@ class context(dict, DictContext):
     Default convenience dict-based context
     """
     pass
+
+
+REMOVED = object()
+
+
+def update_dict(dct, **updates):
+    """
+    Updates nested dict values with Django-like query syntax. Returns an updated copy of the original dict.
+
+    If some parameter has value REMOVED, it is removed from the dict.
+
+    Example:
+        >>> dct = {"a": {"b": 1}, "c": [1, 2], "d": 3}
+        >>> update_dict(dct, a__b=4, c__0=5, c__1=REMOVED, d=REMOVED)
+        {'a': {'b': 4}, 'c': [5]}
+    """
+    copy_of_dct = copy.deepcopy(dct)
+
+    for key, value in updates.items():
+        node = copy_of_dct
+        key_parts = key.split("__")
+        for i, key_part in enumerate(key_parts, 1):
+            if key_part.isdigit():
+                key_part = int(key_part)
+
+            if i < len(key_parts):  # Not a leaf node
+                node = node[key_part]
+            else:
+                if value is REMOVED:
+                    try:
+                        node.pop(key_part)
+                    except (IndexError, KeyError):
+                        pass
+                else:
+                    node[key_part] = value
+
+    return copy_of_dct
