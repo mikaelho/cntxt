@@ -2,6 +2,8 @@ import time
 from dataclasses import is_dataclass
 from threading import Thread
 
+import pytest
+
 from cntxt import context
 from cntxt import Context
 
@@ -41,11 +43,18 @@ def test_dict_based_context():
     assert context._current_context() is None
 
 
+def test_nested_references__dict_based_context():
+    with context.set(a={"b": 1}):
+        assert context["a"]["b"] == 1
+        with context.set(a__b=2):
+            assert context["a"]["b"] == 2
+
+
 def test_object_based_context():
     """
-    Check that contexts get created, updated and dropped as expected.
+    Check that Context-based contexts get created, updated and dropped as expected.
 
-    Also check that our Context-based contexts are internally dataclasses.
+    Also check that they are internally dataclasses.
     """
 
     assert is_dataclass(Ctx)
@@ -64,6 +73,21 @@ def test_object_based_context():
         assert Ctx.b == "b"
 
     assert Ctx._current_context() is None
+
+
+def test_direct_modification_not_allowed():
+    with pytest.raises(RuntimeError):
+        Ctx.a = 4
+    assert Ctx.a is None
+
+    with Ctx.set(a=1):
+        assert Ctx.a == 1
+
+        with pytest.raises(RuntimeError):
+            Ctx.a = 3
+
+        assert Ctx.a == 1
+    assert Ctx.a is None
 
 
 def test_multilevel():
@@ -183,6 +207,7 @@ def test_recursion():
     """
     Check that nothing surprising happens with recursion.
     """
+    assert Ctx.a is None
 
     # Define a recursive function with a regular counter for asserting that context behaves as expected.
     def recursive(counter=0):

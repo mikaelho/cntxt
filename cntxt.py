@@ -9,6 +9,9 @@ from typing import Self
 __all__ = "context", "Context", "DictContext"
 
 
+class ContextStack(list):
+    pass
+
 class DictMixinMeta(type):
     def __getitem__(self, item):
         current_context = self._current_context()
@@ -20,7 +23,9 @@ class DictMixinMeta(type):
 class DataclassMixinMeta(type):
     def __new__(cls, *args, **kwargs):
         new_cls = super().__new__(cls, *args, **kwargs)
-        return dataclass(new_cls)
+        as_dataclass = dataclass(new_cls)
+        # as_dataclass.__setattr__ = _setattr_template.__get__(as_dataclass, DataclassMixinMeta)
+        return as_dataclass
 
     def __getattribute__(self, item):
         if item in ("_current_context", "_class_identifier"):
@@ -29,6 +34,16 @@ class DataclassMixinMeta(type):
         if not current_context:
             return super().__getattribute__(item)
         return getattr(current_context, item)
+
+    def __setattr__(self, key, value):
+        frame = inspect.currentframe()
+        while frame:
+            if frame.f_code.co_qualname in ("DataclassMixinMeta.__new__",):
+                super().__setattr__(key, value)
+                break
+            frame = frame.f_back
+        else:
+            raise RuntimeError("Set context values only in context manager set() method")
 
 
 class ContextMixin:
@@ -53,12 +68,13 @@ class ContextMixin:
     def _wrap_context_frame(cls, **ctx):
         current_frame = frame = inspect.currentframe().f_back.f_back
         while frame:
-            if context_stack := frame.f_locals.get(cls._class_identifier(), []):
+            if context_stack := frame.f_locals.get(cls._class_identifier()):
                 break
             frame = frame.f_back
         else:
             frame = current_frame
-            context_stack = []
+            context_stack = ContextStack()
+
         prev_context: Self = context_stack and context_stack[-1] or cls()
         updated_context = prev_context._merge(ctx)
         context_stack.append(updated_context)
@@ -77,7 +93,16 @@ class ContextMixin:
             new_dict = update_dict(self, **ctx)
         else:
             raise TypeError(f"Context class is not a dict or a dataclass but {type(self)}")
-        return type(self)(**new_dict)
+
+        new_context = type(self)(**new_dict)
+
+        # Disable setters
+        # if is_dataclass(self):
+        #     new_context.__setattr__ =
+        # else:
+        #     ...
+
+        return new_context
 
     @classmethod
     def _current_context(cls) -> Self | None:
@@ -121,8 +146,8 @@ def update_dict(dct, **updates):
 
     Example:
         >>> dct = {"a": {"b": 1}, "c": [1, 2], "d": 3}
-        >>> update_dict(dct, a__b=4, c__0=5, c__1=REMOVED, d=REMOVED)
-        {'a': {'b': 4}, 'c': [5]}
+        >>> update_dict(dct, a__b=4, c__0=5, c__1=REMOVED, d=REMOVED, e=6, f={"g": 1})
+        {'a': {'b': 4}, 'c': [5], 'e': 6, 'f': {'g': 1}}
     """
     copy_of_dct = copy.deepcopy(dct)
 
