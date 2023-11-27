@@ -21,10 +21,9 @@ class DictMixinMeta(type):
 
 
 class DataclassMixinMeta(type):
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, use_dataclass=dataclass, **kwargs):
         new_cls = super().__new__(cls, *args, **kwargs)
-        as_dataclass = dataclass(new_cls)
-        # as_dataclass.__setattr__ = _setattr_template.__get__(as_dataclass, DataclassMixinMeta)
+        as_dataclass = use_dataclass(new_cls)
         return as_dataclass
 
     def __getattribute__(self, item):
@@ -36,9 +35,12 @@ class DataclassMixinMeta(type):
         return getattr(current_context, item)
 
     def __setattr__(self, key, value):
+        """
+        Only support setting attributes on initialization.
+        """
         frame = inspect.currentframe()
         while frame:
-            if frame.f_code.co_qualname in ("DataclassMixinMeta.__new__",):
+            if frame.f_code.co_qualname == f"DataclassMixinMeta.__new__":
                 super().__setattr__(key, value)
                 break
             frame = frame.f_back
@@ -95,12 +97,6 @@ class ContextMixin:
             raise TypeError(f"Context class is not a dict or a dataclass but {type(self)}")
 
         new_context = type(self)(**new_dict)
-
-        # Disable setters
-        # if is_dataclass(self):
-        #     new_context.__setattr__ =
-        # else:
-        #     ...
 
         return new_context
 

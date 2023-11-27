@@ -1,6 +1,3 @@
-from contextlib import contextmanager
-from dataclasses import dataclass
-
 from cntxt import Context
 
 
@@ -8,14 +5,15 @@ DEFAULT_DURATION = 0.3  # seconds
 EASE_IN_OUT = "ease_in_out"
 EASE_OUT_IN = "ease_out_in"
 
+
 # Animation settings
 
-@dataclass
 class Animation(Context):
     duration: float = DEFAULT_DURATION
     ease: str = None
     start_delay: float = None
     end_delay: float = None
+
 
 # Convenience context managers
 
