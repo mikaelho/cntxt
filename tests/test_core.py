@@ -1,4 +1,6 @@
+import asyncio
 import time
+from asyncio import TaskGroup
 from dataclasses import is_dataclass
 from threading import Thread
 
@@ -135,14 +137,6 @@ def test_multiple_contexts():
                 assert Ctx2.c == 1
 
 
-# def test_sub_contexts():  # TODO
-#     c = Ctx2(c=1, d=SubValue(e=2))
-#     assert asdict(c) == {'c': 1, 'd': {'e': 2}}
-#     new_c = Ctx2(**asdict(c))
-#
-#     assert new_c.d.e == 2
-
-
 def test_wrap():
     """
     Check operation of the method for wrapping an existing function in a context.
@@ -201,6 +195,31 @@ def test_thread_safety__between_threads():
     (thread2 := Thread(target=thread, args=(0.1, 0.1))).start()
     thread1.join()
     thread2.join()
+
+
+def test_asyncio():
+    """
+    Test context behavior with asyncio:
+    - acyncio.run() inherits the enclosing context (stack)
+    - Workers need to be configured as a group, or inside the (top-level) worker function
+    """
+    with Ctx.set(a=1):
+        async def worker(b_should_be: str):
+            assert Ctx.a == 1
+            assert Ctx.b == b_should_be
+            with Ctx.set(b="d"):
+                assert Ctx.b == "d"
+
+        async def main():
+            with Ctx.set(b="b"):
+                async with TaskGroup() as group:
+                    group.create_task(worker(b_should_be="b"))
+                    with Ctx.set(b="c"):
+                        # Tasks are executed in the "group" context, not in this context
+                        assert Ctx.b == "c"
+                        group.create_task(worker(b_should_be="b"))
+
+        asyncio.run(main())
 
 
 def test_recursion():
