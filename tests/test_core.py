@@ -36,9 +36,8 @@ def test_stack():
     def func(expected_value):
         assert stack.a == expected_value
 
-    enclosing_func()
-
     stack.a = 2
+    enclosing_func()
     func(2)
 
 
