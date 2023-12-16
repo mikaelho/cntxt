@@ -27,17 +27,29 @@ class Stack(IdentifiedClass):
         identifier = type(self)._class_identifier()
         frame = inspect.currentframe()
         while frame := frame.f_back:
-            if scope := frame.f_locals.get(identifier):
-                if value := scope.get(item):
+            if scopes := frame.f_locals.get(identifier):
+                if value := scopes[-1].get(item):
                     return value
         return super().__getattribute__(item)
 
     def __setattr__(self, key, value):
         identifier = type(self)._class_identifier()
         stack_locals = inspect.currentframe().f_back.f_locals
-        scope = stack_locals.get(identifier) or dict()
-        scope[key] = value
-        stack_locals[identifier] = scope
+        scopes = stack_locals.get(identifier) or []
+        scopes.append({key: value})
+        stack_locals[identifier] = scopes
+
+    @contextmanager
+    def set(self, **kwargs):
+        identifier = type(self)._class_identifier()
+        stack_locals = inspect.currentframe().f_back.f_back.f_locals
+        scopes = stack_locals.get(identifier) or []
+        items_before_block = len(scopes)
+        scopes.append(kwargs)
+
+        yield
+
+        stack_locals[identifier] = scopes[:items_before_block]
 
 
 stack = Stack()

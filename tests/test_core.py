@@ -25,7 +25,7 @@ class Ctx2(Context):
     d: SubValue = None
 
 
-def test_stack():
+def test_dynamic_scope():
     with pytest.raises(AttributeError):
         stack.not_set  # noqa
 
@@ -37,8 +37,78 @@ def test_stack():
         assert stack.a == expected_value
 
     stack.a = 2
-    enclosing_func()
     func(2)
+    enclosing_func()
+
+
+def test_global_scope():
+    global a
+
+    def enclosing_func():
+        global a
+        a = 1
+        func()
+
+    def func():
+        global a
+        assert a == 1
+
+    a = 2
+    enclosing_func()
+    func()
+    assert a == 1
+
+
+def test_compare_with_lexical_scope():
+    def enclosing_func():
+        a = 1
+        func()
+
+    def func():
+        assert a == 2
+
+    a = 2
+    enclosing_func()
+    func()
+    assert a == 2
+
+
+def test_stack_with_context_only():
+    stack.a = 1
+
+    with stack.set(a=2):
+        assert stack.a == 2
+
+    assert stack.a == 1
+
+
+def test_stack_with_values_set_within_context_block():
+    stack.a = 1
+
+    with stack.set(a=2):
+        assert stack.a == 2
+        stack.a = 3
+        assert stack.a == 3
+
+    assert stack.a == 1
+
+
+def test_stack_with_multiple_levels_of_contexts_and_functions():
+    def func1():
+        stack.a = 2
+        with stack.set(a=3):
+            func2()
+
+    def func2():
+        assert stack.a == 3
+        with stack.set(a=4):
+            stack.a = 5
+            assert stack.a == 5
+        assert stack.a == 3
+
+    stack.a = 1
+    func1()
+    assert stack.a == 1
 
 
 def test_dict_based_context():
