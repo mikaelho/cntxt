@@ -24,32 +24,29 @@ class Stack(IdentifiedClass):
     def __getattribute__(self, item):
         if item == "_class_identifier":
             return super().__getattribute__(item)
-        identifier = type(self)._class_identifier()
         frame = inspect.currentframe()
         while frame := frame.f_back:
-            if scopes := frame.f_locals.get(identifier):
+            if scopes := frame.f_locals.get(self):
                 if value := scopes[-1].get(item):
                     return value
         return super().__getattribute__(item)
 
     def __setattr__(self, key, value):
-        identifier = type(self)._class_identifier()
         stack_locals = inspect.currentframe().f_back.f_locals
-        scopes = stack_locals.get(identifier) or []
+        scopes = stack_locals.get(self) or []
         scopes.append({key: value})
-        stack_locals[identifier] = scopes
+        stack_locals[self] = scopes
 
     @contextmanager
     def set(self, **kwargs):
-        identifier = type(self)._class_identifier()
         stack_locals = inspect.currentframe().f_back.f_back.f_locals
-        scopes = stack_locals.get(identifier) or []
+        scopes = stack_locals.get(self) or []
         items_before_block = len(scopes)
         scopes.append(kwargs)
 
         yield
 
-        stack_locals[identifier] = scopes[:items_before_block]
+        stack_locals[self] = scopes[:items_before_block]
 
 
 stack = Stack()
