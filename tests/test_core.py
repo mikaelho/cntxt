@@ -8,6 +8,7 @@ import pytest
 
 from cntxt import context
 from cntxt import Context
+from cntxt import stack
 
 
 class Ctx(Context):
@@ -24,12 +25,29 @@ class Ctx2(Context):
     d: SubValue = None
 
 
+def test_stack():
+    with pytest.raises(AttributeError):
+        stack.not_set  # noqa
+
+    def enclosing_func():
+        stack.a = 1
+        func(1)
+
+    def func(expected_value):
+        assert stack.a == expected_value
+
+    enclosing_func()
+
+    stack.a = 2
+    func(2)
+
+
 def test_dict_based_context():
     """
     Check that dict-based contexts are created, updated and dropped as expected.
     """
 
-    assert context._current_context() is None
+    assert context._current_scope() is None
 
     with context.set(a=1, b=1):
         assert context["a"] == 1
@@ -42,7 +60,7 @@ def test_dict_based_context():
         assert context["a"] == 1
         assert context["b"] == 1
 
-    assert context._current_context() is None
+    assert context._current_scope() is None
 
 
 def test_nested_references__dict_based_context():
@@ -61,7 +79,7 @@ def test_object_based_context():
 
     assert is_dataclass(Ctx)
 
-    assert Ctx._current_context() is None
+    assert Ctx._current_scope() is None
 
     with Ctx.set(a=1, b="b"):
         assert Ctx.a == 1
@@ -74,7 +92,7 @@ def test_object_based_context():
         assert Ctx.a == 1
         assert Ctx.b == "b"
 
-    assert Ctx._current_context() is None
+    assert Ctx._current_scope() is None
 
 
 def test_direct_modification_not_allowed():
@@ -120,12 +138,12 @@ def test_multiple_contexts():
 
     assert Ctx._class_identifier() != Ctx2._class_identifier()
 
-    assert Ctx._current_context() is None
-    assert Ctx2._current_context() is None
+    assert Ctx._current_scope() is None
+    assert Ctx2._current_scope() is None
 
     with Ctx.set(a=1):
         assert Ctx.a == 1
-        assert Ctx2._current_context() is None
+        assert Ctx2._current_scope() is None
 
         with Ctx2.set(c=2):
             assert Ctx.a == 1

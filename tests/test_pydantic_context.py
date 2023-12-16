@@ -21,7 +21,7 @@ def test_pydantic_based_context():
     """
     Check that contexts get created, updated and dropped as expected.
     """
-    assert Ctx._current_context() is None
+    assert Ctx._current_scope() is None
 
     with Ctx.set(a=1, b="b"):
         assert Ctx.a == 1
@@ -34,7 +34,7 @@ def test_pydantic_based_context():
         assert Ctx.a == 1
         assert Ctx.b == "b"
 
-    assert Ctx._current_context() is None
+    assert Ctx._current_scope() is None
 
 
 def test_direct_modification_not_allowed():

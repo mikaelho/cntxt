@@ -6,18 +6,49 @@ from dataclasses import dataclass
 from dataclasses import is_dataclass
 from typing import Self
 
+
 __all__ = "context", "Context", "DictContext"
 
 
 class ContextStack(list):
     pass
 
+
+class IdentifiedClass:
+    @classmethod
+    def _class_identifier(cls):
+        return f"_cntxt_{str(cls)}"
+
+
+class Stack(IdentifiedClass):
+    def __getattribute__(self, item):
+        if item == "_class_identifier":
+            return super().__getattribute__(item)
+        identifier = type(self)._class_identifier()
+        frame = inspect.currentframe()
+        while frame := frame.f_back:
+            if scope := frame.f_locals.get(identifier):
+                if value := scope.get(item):
+                    return value
+        return super().__getattribute__(item)
+
+    def __setattr__(self, key, value):
+        identifier = type(self)._class_identifier()
+        stack_locals = inspect.currentframe().f_back.f_locals
+        scope = stack_locals.get(identifier) or dict()
+        scope[key] = value
+        stack_locals[identifier] = scope
+
+
+stack = Stack()
+
+
 class DictMixinMeta(type):
     def __getitem__(self, item):
-        current_context = self._current_context()
-        if not current_context:
+        current_scope = self._current_scope()
+        if not current_scope:
             {}[item]  # noqa: raise IndexError
-        return current_context[item]
+        return current_scope[item]
 
 
 class DataclassMixinMeta(type):
@@ -27,12 +58,12 @@ class DataclassMixinMeta(type):
         return as_dataclass
 
     def __getattribute__(self, item):
-        if item in ("_current_context", "_class_identifier"):
+        if item in ("_current_scope", "_class_identifier"):
             return super().__getattribute__(item)
-        current_context = self._current_context()
-        if not current_context:
+        current_scope = self._current_scope()
+        if not current_scope:
             return super().__getattribute__(item)
-        return getattr(current_context, item)
+        return getattr(current_scope, item)
 
     def __setattr__(self, key, value):
         """
@@ -48,7 +79,7 @@ class DataclassMixinMeta(type):
             raise RuntimeError("Set context values only in context manager set() method")
 
 
-class ContextMixin:
+class ContextMixin(IdentifiedClass):
 
     @classmethod
     @contextmanager
@@ -60,11 +91,8 @@ class ContextMixin:
         def wrapper(*args, **kwargs):
             with cls.set(**ctx):
                 return func(*args, **kwargs)
-        return wrapper
 
-    @classmethod
-    def _class_identifier(cls):
-        return f"_cntxt_{str(cls)}"
+        return wrapper
 
     @classmethod
     def _wrap_context_frame(cls, **ctx):
@@ -88,6 +116,7 @@ class ContextMixin:
         if not context_stack:
             del frame.f_locals[cls._class_identifier()]
 
+
     def _merge(self, ctx):
         if is_dataclass(self):
             new_dict = update_dict(asdict(self), **ctx)
@@ -100,8 +129,9 @@ class ContextMixin:
 
         return new_context
 
+
     @classmethod
-    def _current_context(cls) -> Self | None:
+    def _current_scope(cls) -> Self | None:
         frame = inspect.currentframe()
         while frame:
             context_stack = frame.f_locals.get(cls._class_identifier())
