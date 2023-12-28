@@ -1,13 +1,16 @@
 import asyncio
 import time
 from asyncio import TaskGroup
+from dataclasses import asdict
 from dataclasses import is_dataclass
 from threading import Thread
 
 import pytest
 
+from cntxt import Stack
 from cntxt import context
 from cntxt import Context
+from cntxt import dynamic
 from cntxt import stack
 
 
@@ -25,23 +28,67 @@ class Ctx2(Context):
     d: SubValue = None
 
 
+variable_with_global_module_scope = 1
+
+def test_scopes():
+
+    global variable_with_global_module_scope
+
+    variable_with_global_module_scope = 2
+
+    def main():
+
+        def func(variable_with_lexical_local_scope):
+            assert variable_with_lexical_local_scope == 1
+            assert variable_with_global_module_scope == 2
+            assert variable_with_lexical_enclosing_scope == 3
+            with pytest.raises(NameError):
+                assert variable_with_dynamic_scope == 4
+
+        def func_earlier_in_the_call_stack():
+            variable_with_dynamic_scope = 4
+            func(variable_with_lexical_local_scope=1)
+
+        variable_with_lexical_enclosing_scope = 3
+
+        func_earlier_in_the_call_stack()
+
+    main()
+
+
+def test_dynamic():
+    stack = dynamic(dict())
+
+    stack["a"] = 1
+    stack["b"] = {"c": {"d": 2}}
+
+    c = stack["b"]["c"]
+
+    c["d"] = 3
+
+    assert False
+
+
 def test_dynamic_scope():
     with pytest.raises(AttributeError):
         stack.not_set  # noqa
 
     def enclosing_func():
+        stack.b = 1
         stack.a = 1
         func(1)
 
     def func(expected_value):
         assert stack.a == expected_value
+        assert stack.b == 1
 
+    stack.b = 1
     stack.a = 2
     func(2)
     enclosing_func()
 
 
-def test_global_scope():
+def test_compare_with_global_scope():
     global a
 
     def enclosing_func():
@@ -73,13 +120,30 @@ def test_compare_with_lexical_scope():
     assert a == 2
 
 
-def test_stack_with_context_only():
+def test_stack_with_deep_values():
+    stack.a = {"b": 1, "c": 1}
+
+    stack.a__b = 2
+
+    assert stack.a == {"b": 2, "c": 1}
+
+
+def test_stack_with_context():
     stack.a = 1
 
     with stack.set(a=2):
         assert stack.a == 2
 
     assert stack.a == 1
+
+
+def test_deep_values_with_context():
+    stack.a = {"b": 1}
+
+    with stack.set(a__b=2):
+        assert stack.a == {"b": 2}
+
+    assert stack.a == {"b": 1}
 
 
 def test_stack_with_values_set_within_context_block():
@@ -109,6 +173,27 @@ def test_stack_with_multiple_levels_of_contexts_and_functions():
     stack.a = 1
     func1()
     assert stack.a == 1
+
+
+def test_dataclass_stack():
+    class Conf:
+        hostname: str = "https://host.net"
+
+    conf = Stack(Conf)
+
+    assert conf.hostname == "https://host.net"
+
+    def calling_func():
+        conf.hostname = "https://newhost.net"
+        func()
+
+    def func():
+        assert conf.hostname == "https://newhost.net"
+
+    calling_func()
+
+    with pytest.raises(TypeError):
+        conf.port = 80
 
 
 def test_dict_based_context():
@@ -176,6 +261,7 @@ def test_direct_modification_not_allowed():
             Ctx.a = 3
 
         assert Ctx.a == 1
+        assert asdict(Ctx._current_scope()) == {"a": 1, "b": None}
     assert Ctx.a is None
 
 

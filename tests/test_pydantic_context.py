@@ -1,6 +1,9 @@
+from dataclasses import asdict
+
 import pytest
 
 from cntxt.pydantic import Context
+from cntxt.pydantic import PydanticStack as Stack
 
 
 class Ctx(Context):
@@ -59,3 +62,5 @@ def test_nested_context_updates():
             assert Ctx2.d.e == 1
             with Ctx2.set(d__e=2):
                 assert Ctx2.d.e == 2
+                assert asdict(Ctx2._current_scope()) == {"c": 1, "d": {"e": 2}}
+            assert Ctx2.d.e == 1
