@@ -7,6 +7,7 @@ from collections.abc import MutableSet
 from typing import Any
 from typing import TypeVar
 
+from cntxt.wrappers import DynamicObject
 from cntxt.wrappers import wrap_target
 
 
@@ -16,9 +17,9 @@ T = TypeVar("T")
 class Manager:
 
     LOCK_TIMEOUT = 1.0
-    NOT_FOUND = object()
 
     def __init__(self, initial_value, frame):
+        self.initial_value = initial_value
         self.root_type = type(initial_value)
 
         self.add_to_stack(initial_value, frame)
@@ -30,22 +31,19 @@ class Manager:
         return f"_dynascope_{str(self.root_type)}"
 
     def get_subject(self, path, frame):
-        if (root_value := self.get_from_stack(frame)) != self.NOT_FOUND:
-            value = self.get_value_by_path(root_value, path)
-            return value
-        assert False, "Should never get here"
+        root_value = self.get_from_stack(frame)
+        return self.get_value_by_path(root_value, path)
 
     def get_plain_value(self, frame, path):
-        if (root_value := self.get_from_stack(frame)) != self.NOT_FOUND:
-            return self.get_value_by_path(root_value, path)
+        root_value = self.get_from_stack(frame)
+        return self.get_value_by_path(root_value, path)
 
     def get_value(self, frame, path):
         value = self.get_plain_value(frame, path)
         return wrap_target(value, path, self)
 
     def mutate(self, frame, path, function_name, args, kwargs):
-        if (stack_value := self.get_from_stack(frame)) is self.NOT_FOUND:
-            raise RuntimeError("Unexpectedly missing stack value")
+        stack_value = self.get_from_stack(frame)
         new_value = copy.deepcopy(stack_value)
         value_for_mutation = self.get_value_by_path(new_value, path)
         result = getattr(value_for_mutation, function_name)(*args, **kwargs)
@@ -62,7 +60,7 @@ class Manager:
                 return previous_scopes[-1]
             frame = frame.f_back
 
-        return self.NOT_FOUND
+        return self.initial_value
 
     def lock_acquire(self):
         if not self.lock.acquire(timeout=self.LOCK_TIMEOUT):
@@ -83,8 +81,6 @@ class Manager:
                 obj = key
             else:
                 obj = object.__getattribute__(obj, key)
-            # else:
-            #     raise TypeError(f"Cannot get value")
         return obj
 
 
@@ -99,13 +95,26 @@ def dynamic(
     if type(target) is type:
         target = target()
 
-    manager = Manager(target, inspect.currentframe().f_back)
-
+    frame = inspect.currentframe().f_back
+    manager = Manager(target, frame)
     wrapped = wrap_target(target, [], manager)
+
     return wrapped
 
 
-# Axioms:
-# 1. Value retrieval retrieves the placeholder with path
-# 3. Setting a value sets or updates the stacked value
-# 4. Comparison operators compare with current actual value
+def is_dynamic(obj):
+    return isinstance(obj, DynamicObject)
+
+
+def fix(obj):
+    if is_dynamic(obj):
+        obj = obj.__subject__
+    return copy.deepcopy(obj)
+
+
+class Stack:
+    """Empty object container."""
+    pass
+
+
+stack = dynamic(Stack)

@@ -1,12 +1,12 @@
 from dataclasses import asdict
 from dataclasses import dataclass
-from types import SimpleNamespace
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 import pytest
 
 from cntxt.manager import dynamic
-from cntxt.wrappers import fix
+from cntxt.manager import fix
+from cntxt.manager import stack
 
 
 def test_vanilla_scopes():
@@ -41,18 +41,16 @@ def test_dynamic_scope_added():
 
     variable_with_global_module_scope = 2
 
-    variable_with_dynamic_scope = dynamic(SimpleNamespace(value=0))
-
     def main():
 
         def func(variable_with_lexical_local_scope):
             assert variable_with_lexical_local_scope == 1
             assert variable_with_global_module_scope == 2
             assert variable_with_lexical_enclosing_scope == 3
-            assert variable_with_dynamic_scope.value == 4
+            assert stack.variable_with_dynamic_scope == 4
 
         def func_earlier_in_the_call_stack():
-            variable_with_dynamic_scope.value = 4
+            stack.variable_with_dynamic_scope = 4
             func(variable_with_lexical_local_scope=1)
 
         variable_with_lexical_enclosing_scope = 3
@@ -114,10 +112,11 @@ def test_dynamic_dataclass():
     def child():
         conf.setting_1 = 2
         assert conf.setting_1 == 2
+        return conf.setting_1
 
-    child()
+    return_value = child()
 
-    assert conf.setting_1 == 1
+    assert conf.setting_1 == return_value == 1
 
 
 def test_pydantic_dataclass():

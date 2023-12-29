@@ -41,27 +41,19 @@ class DynamicObject(CallbackWrapper):
     def __exit__(self, exc_type, exc_value, traceback):
         self._manager.end_with_block()
 
-    # def __getattribute__(self, attr, oga=object.__getattribute__):
-    #     subject = oga(self, "__subject__")
-    #     if attr == "__subject__":
-    #         return subject
-    #     elif attr in ("_path", "_manager"):
-    #         return oga(self, attr)
-    #     return wrap_target(getattr(subject, attr), self._path + [attr], self._manager)
+    def __getattribute__(self, attr, oga=object.__getattribute__):
+        subject = oga(self, "__subject__")
+        if attr == "__subject__":
+            return subject
+        elif attr in ("_path", "_manager"):
+            return oga(self, attr)
+        elif attr.startswith("_"):
+            return getattr(subject, attr)
+        else:
+            return wrap_target(getattr(subject, attr), self._path + [attr], self._manager)
 
     def __getitem__(self, arg):
         return wrap_target(self.__subject__[arg], self._path + [arg], self._manager)
-
-
-def is_dynamic(obj):
-    return isinstance(obj, DynamicObject)
-
-
-def fix(obj):
-    if is_dynamic(obj):
-        return obj.__subject__
-    else:
-        return obj
 
 
 class DynamicMapping(DynamicObject):
