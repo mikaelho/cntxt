@@ -34,12 +34,12 @@ class DynamicObject(CallbackWrapper):
         return copy.deepcopy(self.__subject__, memo)  # noqa
 
     def __enter__(self):
-        self._manager.start_with_block()
+        self._manager.start_with_block(inspect.currentframe().f_back)
 
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self._manager.end_with_block()
+        self._manager.end_with_block(inspect.currentframe().f_back)
 
     def __getattribute__(self, attr, oga=object.__getattribute__):
         subject = oga(self, "__subject__")
@@ -105,19 +105,14 @@ mutating_methods = {
 for dynamic_type in mutating_methods:
     for func_name in mutating_methods[dynamic_type]:
         def func(self, *args, tracker_function_name=func_name, **kwargs):
-            self._manager.lock_acquire()
-            try:
-                result = self._manager.mutate(
-                    inspect.currentframe().f_back,
-                    self._path,
-                    tracker_function_name,
-                    args,
-                    kwargs,
-                )
-                return result
-
-            finally:
-                self._manager.lock.release()
+            result = self._manager.mutate(
+                inspect.currentframe().f_back,
+                self._path,
+                tracker_function_name,
+                args,
+                kwargs,
+            )
+            return result
 
         setattr(dynamic_type, func_name, func)
         getattr(dynamic_type, func_name).__name__ = func_name

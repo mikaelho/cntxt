@@ -22,9 +22,7 @@ class Manager:
         self.initial_value = initial_value
         self.root_type = type(initial_value)
 
-        self.add_to_stack(initial_value, frame)
-
-        self.lock = threading.RLock()
+        self.start_of_block_scope_length = 0
 
     @property
     def locals_key(self):
@@ -62,13 +60,6 @@ class Manager:
 
         return self.initial_value
 
-    def lock_acquire(self):
-        if not self.lock.acquire(timeout=self.LOCK_TIMEOUT):
-            raise RuntimeError(f'Trying to acquire lock for: {self.root_type}')
-
-    def lock_release(self):
-        self.lock.release()
-
     @staticmethod
     def get_value_by_path(obj, path: list):
         path = path.copy()
@@ -82,6 +73,14 @@ class Manager:
             else:
                 obj = object.__getattribute__(obj, key)
         return obj
+
+    def start_with_block(self, frame):
+        previous_scopes = frame.f_locals.setdefault(self.locals_key, [])
+        self.start_of_block_scope_length = len(previous_scopes)
+
+    def end_with_block(self, frame):
+        previous_scopes = frame.f_locals.setdefault(self.locals_key, [])
+        frame.f_locals[self.locals_key] = previous_scopes[:self.start_of_block_scope_length]
 
 
 def dynamic(
@@ -110,6 +109,18 @@ def fix(obj):
     if is_dynamic(obj):
         obj = obj.__subject__
     return copy.deepcopy(obj)
+
+
+def start_block(obj):
+    if not is_dynamic(obj):
+        raise TypeError("Parameter has to be dynamic")
+    obj._manager.start_with_block(inspect.currentframe().f_back.f_back)
+
+
+def end_block(obj):
+    if not is_dynamic(obj):
+        raise TypeError("Parameter has to be dynamic")
+    obj._manager.end_with_block(inspect.currentframe().f_back.f_back)
 
 
 class Stack:
