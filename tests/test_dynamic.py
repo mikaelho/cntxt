@@ -63,23 +63,27 @@ def test_dynamic_scope_added():
 
 
 def test_dynamic_dict():
-    wrapped = dynamic({})
-    assert isinstance(wrapped, dict)
-    assert wrapped == {}
-    assert wrapped.__subject__ == {}
+    dynamic_dict = dynamic({})
+    assert isinstance(dynamic_dict, dict)
+    assert dynamic_dict == {}
+    assert dynamic_dict.__subject__ == {}
 
-    wrapped["a"] = 1
-    assert wrapped.__subject__ == {"a": 1}
-    assert wrapped["a"] == 1
+    dynamic_dict["a"] = 1
+    assert dynamic_dict.__subject__ == {"a": 1}
+    assert dynamic_dict["a"] == 1
+
+    dynamic_dict["b"] = {"c": 3}
 
     def child():
-        assert wrapped["a"] == 1
+        assert dynamic_dict["a"] == 1
 
-        wrapped["a"] = {"b": 2}
-        assert wrapped["a"]["b"] == 2
-        assert wrapped["a"] == {"b": 2}
+        dynamic_dict["a"] = {"b": 2}
+        dynamic_dict["b"]["c"] = 4
 
-        a = wrapped["a"]
+        assert dynamic_dict["a"]["b"] == 2
+        assert dynamic_dict["a"] == {"b": 2}
+
+        a = dynamic_dict["a"]
         assert a == {"b": 2}
 
         b = a["b"]
@@ -91,7 +95,8 @@ def test_dynamic_dict():
 
     a, b, c, d = child()
 
-    assert wrapped["a"] == 1
+    assert dynamic_dict["a"] == 1
+    assert dynamic_dict["b"]["c"] == 3
 
     assert a == 1
     with pytest.raises(AttributeError, match="'int' object has no attribute 'b'"):
