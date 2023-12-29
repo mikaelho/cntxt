@@ -1,10 +1,69 @@
+from dataclasses import asdict
+from dataclasses import dataclass
+from types import SimpleNamespace
+
+from pydantic.dataclasses import dataclass as pydantic_dataclass
 import pytest
 
 from cntxt.manager import dynamic
 from cntxt.wrappers import fix
 
 
-def test_create():
+def test_vanilla_scopes():
+
+    global variable_with_global_module_scope
+
+    variable_with_global_module_scope = 2
+
+    def main():
+
+        def func(variable_with_lexical_local_scope):
+            assert variable_with_lexical_local_scope == 1
+            assert variable_with_global_module_scope == 2
+            assert variable_with_lexical_enclosing_scope == 3
+            with pytest.raises(NameError):
+                assert variable_with_dynamic_scope == 4
+
+        def func_earlier_in_the_call_stack():
+            variable_with_dynamic_scope = 4
+            func(variable_with_lexical_local_scope=1)
+
+        variable_with_lexical_enclosing_scope = 3
+
+        func_earlier_in_the_call_stack()
+
+    main()
+
+
+def test_dynamic_scope_added():
+
+    global variable_with_global_module_scope
+
+    variable_with_global_module_scope = 2
+
+    variable_with_dynamic_scope = dynamic(SimpleNamespace(value=0))
+
+    def main():
+
+        def func(variable_with_lexical_local_scope):
+            assert variable_with_lexical_local_scope == 1
+            assert variable_with_global_module_scope == 2
+            assert variable_with_lexical_enclosing_scope == 3
+            assert variable_with_dynamic_scope.value == 4
+
+        def func_earlier_in_the_call_stack():
+            variable_with_dynamic_scope.value = 4
+            func(variable_with_lexical_local_scope=1)
+
+        variable_with_lexical_enclosing_scope = 3
+
+        func_earlier_in_the_call_stack()
+
+    main()
+
+
+
+def test_dynamic_dict():
     wrapped = dynamic({})
     assert isinstance(wrapped, dict)
     assert wrapped == {}
@@ -40,3 +99,31 @@ def test_create():
         assert b == 2  # Trying to resolve a["b"] but in this scope a == 1
     assert c == 2
     assert d == 2
+
+
+def test_dynamic_dataclass():
+    @dataclass
+    class Configuration:
+        setting_1: int = 1
+
+    conf = dynamic(Configuration)  # Or dynamic(Configuration())
+    assert isinstance(conf, Configuration)
+    assert asdict(fix(conf)) == {"setting_1": 1}
+    assert conf.setting_1 == 1
+
+    def child():
+        conf.setting_1 = 2
+        assert conf.setting_1 == 2
+
+    child()
+
+    assert conf.setting_1 == 1
+
+
+def test_pydantic_dataclass():
+    @pydantic_dataclass
+    class Configuration:
+        setting_1: int
+
+    conf = dynamic(Configuration("1"))
+    assert conf.setting_1 == 1

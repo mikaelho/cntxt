@@ -96,6 +96,9 @@ def dynamic(
 
     Return value is a proxy type, but type hinted to match the tagged object for editor convenience.
     """
+    if type(target) is type:
+        target = target()
+
     manager = Manager(target, inspect.currentframe().f_back)
 
     wrapped = wrap_target(target, [], manager)

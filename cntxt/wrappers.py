@@ -93,7 +93,7 @@ dynamic_types = {
 }
 
 mutating_methods = {
-    DynamicCustomObject: [
+    DynamicObject: [
         '__setattr__', '__delattr__',  # '__iadd__', '__isub__', '__imul__', '__imatmul__', '__itruediv__',
         # '__ifloordiv__', '__imod__', '__ipow__', '__ilshift__', '__irshift__', '__iand__', '__ixor__', '__ior__',
     ],
@@ -132,30 +132,10 @@ for dynamic_type in mutating_methods:
 
 
 def wrap_target(target: T, path: list, manager: "Manager") -> T:
-    tracked = None
-    is_object = False
-
     for abc, wrapper in dynamic_types.items():
         if isinstance(target, abc):
-            tracked = wrapper(path, manager)
-            break
-    else:
-        if type(target) is type:
-            target = target()
-        # if hasattr(target, '__dict__'):
-        #     tracked = DynamicCustomObject(path + ['__dict__'], manager)
-        #     is_object = True
-        # else:
-        tracked = DynamicObject(path, manager)
-
-    # if not path:  # i.e. root
-    #     manager.root = tracked
-    #     manager.root_type = type(target)
-    #     manager.instantiate_root_with_keywords = is_object
-
-    # wrap_members(tracked)
-
-    return tracked
+            return wrapper(path, manager)
+    return DynamicObject(path, manager)
 
 
 def wrap_members(tracked: DynamicObject):
